@@ -1,0 +1,27 @@
+gpsp-pico patch to upstream gpSP (cpu.h), GPL-2.0-or-later like the file it changes.
+Copyright (c) 2026 TheGammaSqueeze. Applied by build.sh to a copy in out/src.
+
+diff --git a/cpu.h b/cpu.h
+--- a/cpu.h
++++ b/cpu.h
+@@ -119,7 +119,19 @@
+ s32 translate_block_thumb(u32 pc, translation_region_type translation_region,
+  u32 smc_enable);
+ 
+-#if defined(PSP)
++#if defined(GBA_LK_SMALL_CACHE)
++
++/* LK/bare-metal: the translation cache must live within ARM BL's +-32 MB reach of
++ * the gpSP helper functions in LK .text (generate_function_call emits a direct
++ * BL). The only free RWX DRAM near LK .text is the base of the SCRATCH region
++ * (~27 MB above the helpers), leaving ~4.8 MB of in-range headroom - so keep the
++ * caches small (gba_wrap.c places them at 0x4E000000). Total 3.25 MB. */
++#define ROM_TRANSLATION_CACHE_SIZE (1024 * 512 * 5)	/* 2.5 MB */
++#define RAM_TRANSLATION_CACHE_SIZE (1024 * 512)		/* 512 KB */
++#define BIOS_TRANSLATION_CACHE_SIZE (1024 * 256)	/* 256 KB */
++#define TRANSLATION_CACHE_LIMIT_THRESHOLD (1024 * 32)
++
++#elif defined(PSP)
+ 
+ #define ROM_TRANSLATION_CACHE_SIZE (1024 * 512 * 4)
+ #define RAM_TRANSLATION_CACHE_SIZE (1024 * 384)

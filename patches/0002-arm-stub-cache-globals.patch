@@ -1,0 +1,15 @@
+gpsp-pico patch to upstream gpSP (arm/arm_stub.S), GPL-2.0-or-later like the file it changes.
+Copyright (c) 2026 TheGammaSqueeze. Applied by build.sh to a copy in out/src.
+
+diff --git a/arm/arm_stub.S b/arm/arm_stub.S
+--- a/arm/arm_stub.S
++++ b/arm/arm_stub.S
+@@ -1,8 +1,5 @@
+ .align 2
+ 
+-.globl invalidate_icache_region
+-.globl invalidate_cache_region
+-
+ .globl memory_map_read
+ .globl memory_map_write
+ .globl reg

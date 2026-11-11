@@ -1,0 +1,88 @@
+gpsp-pico patch to upstream gpSP (gba_memory.c, gba_memory.h), GPL-2.0-or-later like the files it changes.
+Copyright (c) 2026 TheGammaSqueeze. Applied by build.sh to a copy in out/src.
+
+diff --git a/gba_memory.c b/gba_memory.c
+--- a/gba_memory.c
++++ b/gba_memory.c
+@@ -2473,6 +2473,43 @@
+   return 0;
+ }
+ 
++/* ---- bare-metal in-memory loaders (LK: no filesystem) ----
++ * The caller has already placed the ROM image into gamepak_rom (see
++ * gba_wrap.c) and hands us the raw byte count; the 16 KB BIOS is copied from a
++ * caller buffer. These do exactly what load_gamepak()/load_bios() do minus all
++ * file I/O and cheat-file loading, so the ARM dynarec, backup-type detection
++ * and per-game config (idle-loop targets etc.) all still run. */
++u32 load_gamepak_mem(u32 file_size)
++{
++  gamepak_size = (file_size + 0x7FFF) & ~0x7FFF;
++
++  gamepak_filename[0] = 0;
++  use_libretro_save_method = 1;   /* we manage the .sav buffer ourselves */
++
++  memcpy(gamepak_title, gamepak_rom + 0xA0, 12);
++  memcpy(gamepak_code,  gamepak_rom + 0xAC, 4);
++  memcpy(gamepak_maker, gamepak_rom + 0xB0, 2);
++  gamepak_title[12] = 0;
++  gamepak_code[4] = 0;
++  gamepak_maker[2] = 0;
++
++  idle_loop_target_pc = 0xFFFFFFFF;
++  iwram_stack_optimize = 1;
++  translation_gate_targets = 0;
++  flash_device_id = FLASH_DEVICE_MACRONIX_64KB;
++  flash_size = FLASH_SIZE_64KB;
++
++  if ((load_game_config_over(gamepak_title, gamepak_code, gamepak_maker)) == -1)
++     load_game_config(gamepak_title, gamepak_code, gamepak_maker);
++
++  return 0;
++}
++
++void load_bios_mem(const u8 *src)
++{
++  memcpy(bios_rom, src, 0x4000);
++}
++
+ // DMA memory regions can be one of the following:
+ // IWRAM - 32kb offset from the contiguous iwram region.
+ // EWRAM - like segmented but with self modifying code check.
+@@ -3228,6 +3265,23 @@
+   }
+ }
+ 
++/* bytes the caller must reserve for the gamepak page map given a ROM buffer of
++ * rombuf_sz (keeps sizeof(gamepak_swap_entry_type) inside this TU). */
++u32 gamepak_memory_map_size(u32 rombuf_sz)
++{
++  return (rombuf_sz / (32 * 1024)) * sizeof(gamepak_swap_entry_type);
++}
++
++/* LK: point the gamepak ROM buffer + page map at caller-provided DRAM instead
++ * of malloc()ing them (LK's heap is ~1 MB - a 32 MB malloc would fail). */
++void init_gamepak_buffer_ext(u8 *rombuf, u32 rombuf_sz, void *memmap)
++{
++  gamepak_rom            = rombuf;
++  gamepak_ram_buffer_size = rombuf_sz;
++  gamepak_ram_pages      = rombuf_sz / (32 * 1024);
++  gamepak_memory_map     = (gamepak_swap_entry_type *)memmap;
++}
++
+ void init_gamepak_buffer(void)
+ {
+   // Try to initialize 32MB (this is mainly for non-PSP platforms)
+diff --git a/gba_memory.h b/gba_memory.h
+--- a/gba_memory.h
++++ b/gba_memory.h
+@@ -298,4 +298,10 @@
+ void gba_load_state(const void *src);
+ void gba_save_state(void *dst);
+ 
++/* bare-metal in-memory loaders (LK) - see gba_memory.c */
++u32 load_gamepak_mem(u32 file_size);
++void load_bios_mem(const u8 *src);
++u32 gamepak_memory_map_size(u32 rombuf_sz);
++void init_gamepak_buffer_ext(u8 *rombuf, u32 rombuf_sz, void *memmap);
++
+ #endif
